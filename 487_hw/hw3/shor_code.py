@@ -74,16 +74,17 @@ def create_circuit_q23():
     
     return circuit
 
-# Create and display the circuit
-circuit_q23 = create_circuit_q23()
-print(circuit_q23.draw())
-
-# Create and display circuit q2.2
-circuit_q22 = create_circuit_q22()
-print("Circuit q2.2:")
-print(circuit_q22.draw())
-
-# Create and display circuit q2.3
-circuit_q23 = create_circuit_q23()
-print("\nCircuit q2.3:")
-print(circuit_q23.draw())
+if __name__ == __main__:
+    # Create and display the circuit
+    circuit_q23 = create_circuit_q23()
+    print(circuit_q23.draw())
+    
+    # Create and display circuit q2.2
+    circuit_q22 = create_circuit_q22()
+    print("Circuit q2.2:")
+    print(circuit_q22.draw())
+    
+    # Create and display circuit q2.3
+    circuit_q23 = create_circuit_q23()
+    print("\nCircuit q2.3:")
+    print(circuit_q23.draw())    
