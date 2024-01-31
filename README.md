@@ -1,1 +1,1 @@
-## Some quantum algorithms implemented with Python.
+### Some quantum algorithms implemented with Python.
