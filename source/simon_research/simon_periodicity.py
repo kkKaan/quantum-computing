@@ -3,7 +3,7 @@ This file contains the code to create a Simon circuit for a given bit string.
 """
 
 from qiskit import QuantumCircuit
-from qiskit_textbook.tools import simon_oracle
+from qiskit_textbook.tools import simon_oracle # install from github
 
 def create_simon_circuit(b):
     n = len(b)
