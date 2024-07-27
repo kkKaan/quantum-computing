@@ -5,6 +5,12 @@ import matplotlib.pyplot as plt
 from qiskit.quantum_info import Operator
 import numpy as np
 from sympy import Matrix, GF
+import sympy
+import itertools
+from collections import Counter
+import scipy as sp
+import datetime
+import galois
 
 from qiskit.circuit.library import GroverOperator, MCMT, ZGate
 
@@ -12,10 +18,12 @@ from qiskit.circuit.library import GroverOperator, MCMT, ZGate
 from qiskit_ibm_runtime import QiskitRuntimeService, Session
 from qiskit.primitives import Sampler
 
+
 class Batch(Session):
     """Class for creating a batch mode in Qiskit Runtime."""
 
     pass
+
 
 def simon_oracle(b):
     """
@@ -24,20 +32,21 @@ def simon_oracle(b):
     :param b: The bitstring for the Simon oracle
     :return: The Simon oracle as a QuantumCircuit
     """
-    b = b[::-1] # reverse b for easy iteration
+    b = b[::-1]  # reverse b for easy iteration
     n = len(b)
-    qc = QuantumCircuit(n * 2)
+    qc = QuantumCircuit(n * 4)
     # Do copy; |x>|0> -> |x>|x>
     for q in range(n):
-        qc.cx(q, q+n)
-    if '1' not in b: 
+        qc.cx(q, q + n)
+    if '1' not in b:
         return qc  # 1:1 mapping, so just exit
-    i = b.find('1') # index of first non-zero bit in b
+    i = b.find('1')  # index of first non-zero bit in b
     # Do |x> -> |s.x> on condition that q_i is 1
     for q in range(n):
         if b[q] == '1':
-            qc.cx(i, (q)+n)
-    return qc 
+            qc.cx(i, (q) + n)
+    return qc
+
 
 def simon_circuit(s):
     """
@@ -47,18 +56,19 @@ def simon_circuit(s):
     :return: The final simon circuit with the secret string s
     """
     n = len(s)
-    simon_circuit = QuantumCircuit(n * 2, n)
+    simon_circuit = QuantumCircuit(n * 4, n)
 
-    simon_circuit.h(range(n))    
+    simon_circuit.h(range(n))
 
     simon_circuit.barrier()
-    simon_circuit &= simon_oracle(s) # Adding the oracle to the circuit
+    simon_circuit &= simon_oracle(s)  # Adding the oracle to the circuit
     simon_circuit.barrier()
 
     simon_circuit.h(range(n))
     simon_circuit.measure(range(n), range(n))
     # print(simon_circuit)
     return simon_circuit
+
 
 def run_simon_circuit(simon_circuit, shots):
     """
@@ -76,153 +86,128 @@ def run_simon_circuit(simon_circuit, shots):
     counts = [key for key in counts.keys() if key != '0' * len(key)]
     return counts
 
-def is_independent(new_equation, matrix):
+
+def is_fully_independent(matrix):
     """
-    Checks if a new equation is independent of a given matrix.
+    Check if the matrix is of full rank.
 
-    :param new_equation: The new equation to check
-    :param matrix: The matrix to check against
-    :return: True if the new equation is independent, False otherwise
+    :param matrix: A numpy array representing the matrix.
+    :return: True if the matrix is of full rank, False otherwise.
     """
-    if matrix.size == 0:
-        return True
-    # Convert the bit string to an array of integers
-    new_row = np.array([int(bit) for bit in new_equation]).reshape(1, -1)
-    augmented_matrix = np.vstack([matrix, new_row])
-    rank_before = np.linalg.matrix_rank(matrix, tol=None)
-    rank_after = np.linalg.matrix_rank(augmented_matrix, tol=None)
-    return rank_after > rank_before
+    if matrix.shape[0] != matrix.shape[1]:
+        return False
+    return np.linalg.matrix_rank(matrix) == matrix.shape[0]
 
-# def _iszero(x):
-#     """
-#     Returns True if x is zero.
-#     """
-#     return getattr(x, 'is_zero', None)
 
-# def _nullspace(M, simplify=False, iszerofunc=_iszero):
-#     """
-#     Returns list of vectors (Matrix objects) that span nullspace of ``M``
+def find_all_independent_subsets(equations, n):
+    """
+    Finds all subsets of size n that are linearly independent.
 
-#     Examples
-#     ========
+    :param equations: List of equations, where each is represented as a bit string.
+    :param n: Size of each subset, and the number of bits in each equation.
+    :return: A list of all independent subsets, each subset is a list of bit strings.
+    """
+    all_subsets = list(itertools.combinations(equations, n))
+    print("Number of subsets:")
+    print(len(all_subsets))
+    print(all_subsets[:3])
+    a = 0
+    independent_subsets = []
+    for subset in all_subsets:
+        # Convert subset to matrix
+        matrix = np.array([[int(bit) for bit in eq] for eq in subset])
+        # if a == 0:
+        #     print(matrix)
+        #     a += 1
+        if is_fully_independent(matrix):
+            independent_subsets.append(subset)
+    return independent_subsets
 
-#     >>> from sympy import Matrix
-#     >>> M = Matrix(3, 3, [1, 3, 0, -2, -6, 0, 3, 9, 6])
-#     >>> M
-#     Matrix([
-#     [ 1,  3, 0],
-#     [-2, -6, 0],
-#     [ 3,  9, 6]])
-#     >>> M.nullspace()
-#     [Matrix([
-#     [-3],
-#     [ 1],
-#     [ 0]])]
 
-#     See Also
-#     ========
+def adotz(a, z):
+    """
+    Computes the dot product of two binary strings a and z.
 
-#     columnspace
-#     rowspace
-#     """
+    :param a: The first binary string
+    :param z: The second binary string
+    :return: The dot product of a and z
+    """
+    return sum([int(a[i]) * int(z[i]) for i in range(len(a))]) % 2
 
-#     reduced, pivots = M.rref(iszerofunc=iszerofunc, simplify=simplify)
-
-#     free_vars = [i for i in range(M.cols) if i not in pivots]
-#     basis     = []
-
-#     for free_var in free_vars:
-#         # for each free variable, we will set it to 1 and all others
-#         # to 0.  Then, we will use back substitution to solve the system
-#         vec           = [M.zero] * M.cols
-#         vec[free_var] = M.one
-
-#         for piv_row, piv_col in enumerate(pivots):
-#             vec[piv_col] -= reduced[piv_row, free_var]
-
-#         basis.append(vec)
-
-#     return [M._new(M.cols, 1, b) for b in basis]
-
-# def rref(A, tol=None):
-#     """
-#     Compute the Reduced Row Echelon Form of matrix A.
-
-#     Parameters:
-#     A (np.array): The input matrix.
-#     tol (float, optional): Tolerance to consider an element in A as zero.
-
-#     Returns:
-#     np.array: The RREF form of A.
-#     """
-#     # Convert to float type to prevent integer division
-#     A = A.astype(np.float64)
-#     rows, cols = A.shape
-#     r = 0  # Rank of A
-#     pivots_pos = []  # Positions of pivot elements
-#     for c in range(cols):
-#         # Find the pivot row
-#         pivot = np.argmax(np.abs(A[r:rows, c])) + r
-#         m = np.abs(A[pivot, c])
-#         if m <= tol:
-#             # Skip column c, making it zero below pivot
-#             A[r:rows, c] = 0
-#             continue
-
-#         # Swap current row and pivot row
-#         A[[r, pivot], c:cols] = A[[pivot, r], c:cols]
-
-#         # Normalize pivot row
-#         A[r, c:cols] = A[r, c:cols] / A[r, c]
-
-#         # Eliminate below
-#         v = A[r, c:cols]  # Copy pivot row
-#         if r < rows - 1:  # If not the last row
-#             A[r + 1:rows, c:cols] -= v * A[r + 1:rows, c:c + 1]
-
-#         # Eliminate above
-#         if r > 0:
-#             A[0:r, c:cols] -= v * A[0:r, c:c + 1]
-
-#         pivots_pos.append(r)
-#         r += 1
-#         if r == rows:
-#             break
-
-#     return A, pivots_pos
-
-# def nullspace(A, tol=1e-12):
-#     """
-#     Find the nullspace of A based on RREF form.
-
-#     Parameters:
-#     A (np.array): The input matrix.
-#     tol (float): Tolerance for considering an element zero.
-
-#     Returns:
-#     np.array: Basis for the nullspace of A.
-#     """
-#     rref_matrix, pivots_pos = rref(A, tol)
-#     rows, cols = A.shape
-#     r = len(pivots_pos)
-#     free_vars = [j for j in range(cols) if j not in pivots_pos]
-
-#     # Initialize nullspace matrix
-#     null_space = np.zeros((cols, len(free_vars)), dtype=np.float64)
-
-#     # Set free variables to 1 one at a time and solve for the pivot variables
-#     for i, free_var in enumerate(free_vars):
-#         null_space[free_var, i] = 1
-#         for pivot, row in zip(pivots_pos[::-1], range(r - 1, -1, -1)):
-#             null_space[pivot, i] = -np.dot(rref_matrix[row, pivot + 1:], null_space[pivot + 1:, i])
-
-#     return null_space
 
 if __name__ == "__main__":
-    s = '1001101000'
+    s = '11010'
+    n = len(s)
     equations = []
     circuit = simon_circuit(s)
     A = np.empty((0, len(s)), int)
+
+    equations = run_simon_circuit(circuit, 10000)
+    print("Equations:")
+    print(equations)
+
+    # Check each element of the equations with the others with the adotz function
+    for i in range(len(equations)):
+        results = []
+        for j in range(len(equations)):
+            if i != j:
+                results.append(adotz(equations[i], equations[j]))
+                # print(f"{equations[i]}.{equations[j]} = ", adotz(equations[i], equations[j]))
+
+        if sum(results) == 0:
+            print(f"Secret string found: {equations[i]}")
+            break
+
+    # for elem in equations:
+    #     print(f"{s}.{elem} = ", adotz(s, elem))
+
+    # Find all subsets of size n
+    all_subsets = list(itertools.combinations(equations, n))
+
+    # # Take the time for adotz function with each subset
+    # times = {}
+    # for subset in all_subsets:
+    #     subset_results = []
+    #     start = datetime.datetime.now().timestamp()
+    #     for elem in subset:
+    #         # Start initial time
+    #         subset_results.append(adotz(s, elem))
+    #         # End time
+
+    #     end = datetime.datetime.now().timestamp()
+    #     if sum(subset_results) == 0:
+    #         times[subset] = end - start
+
+    #     print("Number of subsets:")
+    #     print(len(all_subsets))
+    #     print("Subsets")
+    #     print(subset_results)
+
+    # print("Times:")
+    # print(times)
+
+    # # Find all independent subsets of size n
+    # independent_subsets = find_all_independent_subsets(equations, n)
+    # print("Independent Subsets:")
+    # print(len(independent_subsets))
+
+    # test linear independence
+    # A = np.array([[1, 0, 1], [1, 1, 1], [0, 1, 0]])
+    # print(is_fully_independent(A))
+
+    # resultss = []
+    # secret = np.random.randint(2, size=n)
+    # secret_str = ''.join([str(bit) for bit in secret])
+
+    # n_samples = 100
+    # for _ in range(n_samples):
+    #     flag = False
+    #     while not flag:
+    #         results = run_simon_circuit(circuit, 2 * n)
+    #         flag = post_processing(results, resultss)
+
+    # freqs = Counter(resultss)
+    # print(f"Most common results: {freqs.most_common(1)[0]}")
 
     # To run on hardware, select the backend with the fewest number of jobs in the queue
     # service = QiskitRuntimeService(channel="ibm_quantum", token="dac892343da53c40e1fea5dbe253c50570450f29e05045767a44f761cf49ad52ab1f95955043e2c6b6e4116a636c8e6fd3ef5edc5e443e45ac77df4fc17a7880")
@@ -235,26 +220,23 @@ if __name__ == "__main__":
     # print(dist)
     # fig = plot_distribution(dist)
     # plt.savefig("simon_distribution.png")
-    
-    while len(equations) < len(s):
-        current_eqn = run_simon_circuit(simon_circuit(s), 1)
-        # print(current_eqn)
-        if len(current_eqn) == 0:
-            continue
-        # Check linear independence and other conditions
-        if current_eqn[0] not in equations and current_eqn[0] != '0' * len(s) and is_independent(current_eqn[0], A):
-            equations.extend(current_eqn)
-            print(equations)
-            A = np.vstack([A, np.array([int(bit) for bit in current_eqn[0]])])
 
-    print("Equations:")
-    print(A)
+    # while len(equations) < len(s):
+    #     current_eqn = run_simon_circuit(simon_circuit(s), 1)
+    #     # print(current_eqn)
+    #     if len(current_eqn) == 0:
+    #         continue
+    #     # Check linear independence and other conditions
+    #     if current_eqn[0] not in equations and current_eqn[0] != '0' * len(s) and is_independent(current_eqn[0], A):
+    #         equations.extend(current_eqn)
+    #         print(equations)
+    #         A = np.vstack([A, np.array([int(bit) for bit in current_eqn[0]])])
 
     # Solve the system of equations
-    sym_A = Matrix(A)
-    b = sym_A.solve(Matrix([0] * len(s)))
-    print("Secret string:")
-    print(b)
+    # sym_A = Matrix(A)
+    # b = sym_A.solve(Matrix([0] * len(s)))
+    # print("Secret string:")
+    # print(b)
 
     # ns = nullspace(A)
     # print(ns)
