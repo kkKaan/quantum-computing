@@ -21,7 +21,6 @@ from qiskit.primitives import Sampler
 
 class Batch(Session):
     """Class for creating a batch mode in Qiskit Runtime."""
-
     pass
 
 
