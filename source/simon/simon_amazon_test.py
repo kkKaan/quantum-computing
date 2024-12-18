@@ -101,7 +101,7 @@ def get_secret_integer(matrix):
     start_time = time.time()
     null_space = gf_v.T.left_null_space()  # Finding the left null space of the matrix
     total_time = time.time() - start_time
-    print("--- %s seconds ---" % total_time)  # Print the time taken for the computation
+    # print("--- %s seconds ---" % total_time)  # Print the time taken for the computation
     ###
 
     null_vector = np.array(null_space)[0]  # Extract the first null space vector
@@ -110,7 +110,7 @@ def get_secret_integer(matrix):
 
 
 if __name__ == '__main__':
-    s = '110111'
+    s = '10010110'
     # Other examples to try:
     # s = '011'
     # s = '00000'
@@ -181,7 +181,7 @@ if __name__ == '__main__':
 
     # Get the secret integer
     secret_int, passed_time = get_secret_integer(ind_v)
-    print('The secret integer is: ' + str(secret_int))
+    print('Found secret string is: ' + str(secret_int))
     print('The secret string is: ' + s)
     if (secret_int == s):
         print('We found the correct answer.')
