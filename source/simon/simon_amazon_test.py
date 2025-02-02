@@ -256,147 +256,161 @@ def get_secret_integer_bitwise(matrix):
     return sol_str, elapsed_time
 
 
-def convert_to_fraction_matrix(A):
+# A matrix solver using the generic method (not bitwise)
+def modinv(a, p):
     """
-    Convert a NumPy array A into an m×n array of Fractions.
+    Compute the modular inverse of a modulo p.
+    Assumes p is prime.
     """
-    m, n = A.shape
-    B = np.empty((m, n), dtype=object)
-    for i in range(m):
-        for j in range(n):
-            # Convert each entry to Fraction. (If already Fraction, this is idempotent.)
-            B[i, j] = Fraction(A[i, j])
-    return B
+    # Extended Euclidean algorithm:
+    t, new_t = 0, 1
+    r, new_r = p, a % p
+    while new_r != 0:
+        quotient = r // new_r
+        t, new_t = new_t, t - quotient * new_t
+        r, new_r = new_r, r - quotient * new_r
+    if r > 1:
+        raise ValueError(f"{a} is not invertible modulo {p}")
+    return t % p
 
 
-def rref_generic_float(A, tol=1e-12):
+def get_secret_integer_generic(matrix, mod=None):
     """
-    Compute the RREF of A (a NumPy array) using float arithmetic.
-    Returns the RREF and the list of pivot column indices.
-    """
-    R = A.copy().astype(np.float64)
-    m, n = R.shape
-    pivot_cols = []
-    r = 0
-    for col in range(n):
-        # Find a pivot in column col (from row r downward)
-        pivot_row = None
-        max_val = tol
-        for i in range(r, m):
-            if abs(R[i, col]) > max_val:
-                max_val = abs(R[i, col])
-                pivot_row = i
-        if pivot_row is None:
-            continue  # no pivot in this column
-        # Swap pivot row into position r
-        if pivot_row != r:
-            R[[r, pivot_row]] = R[[pivot_row, r]]
-        pivot_cols.append(col)
-        # Normalize pivot row
-        R[r, :] = R[r, :] / R[r, col]
-        # Eliminate column col in all other rows
-        for i in range(m):
-            if i != r and abs(R[i, col]) > tol:
-                R[i, :] = R[i, :] - R[i, col] * R[r, :]
-        r += 1
-        if r == m:
-            break
-    return R, pivot_cols
-
-
-def rref_generic_exact(B):
-    """
-    Compute the RREF of matrix B using exact arithmetic with Fractions.
-    B is assumed to be a NumPy array of object (Fractions).
-    Returns (R, pivot_cols) where R is the RREF (as an m×n array of Fractions).
-    """
-    B = B.copy()  # make a copy (entries are Fractions)
-    m, n = B.shape
-    pivot_cols = []
-    r = 0
-    for col in range(n):
-        pivot_row = None
-        for i in range(r, m):
-            if B[i, col] != 0:
-                pivot_row = i
-                break
-        if pivot_row is None:
-            continue
-        if pivot_row != r:
-            B[[r, pivot_row]] = B[[pivot_row, r]]
-        pivot_cols.append(col)
-        pivot_val = B[r, col]
-        # Normalize pivot row: divide the entire row by pivot_val
-        for j in range(col, n):
-            B[r, j] = B[r, j] / pivot_val
-        # Eliminate this column from all other rows
-        for i in range(m):
-            if i != r and B[i, col] != 0:
-                factor = B[i, col]
-                for j in range(col, n):
-                    B[i, j] = B[i, j] - factor * B[r, j]
-        r += 1
-        if r == m:
-            break
-    return B, pivot_cols
-
-
-def solve_nullspace_generic(A, use_exact=False, tol=1e-12):
-    """
-    Compute a basis for the nullspace (kernel) of the matrix A (an m×n NumPy array)
-    without using any external nullspace library.
+    A generic nullspace solver that uses our own Gaussian elimination routine.
     
     Parameters:
-      A         : 2D NumPy array (of numbers). For exact (symbolic) arithmetic, the entries
-                  should be integers or rationals.
-      use_exact : If True, the algorithm converts the matrix to one with Fraction entries and
-                  works exactly. Otherwise, standard float arithmetic is used.
-      tol       : Tolerance for determining zero in float arithmetic (ignored in exact mode).
-    
+       matrix : a list of lists (or NumPy array) representing the matrix.
+       mod    : if provided (e.g. mod=2), perform arithmetic modulo mod.
+                If None and all entries are 0 or 1, then automatically use mod=2.
+                
     Returns:
-      A list of basis vectors. Each basis vector is represented as a 1D NumPy array.
-      (If the nullspace is trivial, returns an empty list.)
+       A tuple (sol_str, elapsed_time) where sol_str is a string representation of one 
+       nontrivial nullspace vector. If no free variable is found (i.e. full column rank), returns (None, elapsed_time).
     """
-    m, n = A.shape
-    if use_exact:
-        B = convert_to_fraction_matrix(A)
-        R, pivot_cols = rref_generic_exact(B)
+    start_time = time.time()
+
+    # Convert input to list of lists
+    if isinstance(matrix, np.ndarray):
+        mat = matrix.tolist()
     else:
-        R, pivot_cols = rref_generic_float(A, tol)
+        mat = [list(row) for row in matrix]
 
-    free_cols = [j for j in range(n) if j not in pivot_cols]
-    if len(free_cols) == 0:
-        return []  # full column rank
+    rows = len(mat)
+    cols = len(mat[0]) if rows > 0 else 0
 
-    basis = []
-    # For each free variable, we set that variable to 1 and all other free variables to 0,
-    # then solve for the pivot variables via back substitution.
-    for free in free_cols:
-        # Initialize a solution vector x of length n (using Fraction(0) in exact mode)
-        if use_exact:
-            x = [Fraction(0) for _ in range(n)]
-            one = Fraction(1)
+    # Automatically set mod=2 if mod is None and all entries are 0 or 1.
+    if mod is None:
+        is_binary = all((x in (0, 1) for row in mat for x in row))
+        if is_binary:
+            mod = 2
+
+    # Convert matrix entries based on mod.
+    if mod is None:
+        # Exact arithmetic over Q
+        A = [[Fraction(x) for x in row] for row in mat]
+    else:
+        # Work modulo mod (assumed prime)
+        A = [[int(x) % mod for x in row] for row in mat]
+
+    pivot_cols = []
+    pivot_rows = []
+    pivot_row = 0
+
+    # Forward elimination (Gaussian elimination)
+    for col in range(cols):
+        pivot_found = False
+        for r in range(pivot_row, rows):
+            if mod is None:
+                cond = (A[r][col] != 0)
+            else:
+                cond = (A[r][col] % mod != 0)
+            if cond:
+                pivot_found = True
+                max_row = r
+                break
+        if not pivot_found:
+            continue
+        if max_row != pivot_row:
+            A[pivot_row], A[max_row] = A[max_row], A[pivot_row]
+        pivot_cols.append(col)
+        pivot_rows.append(pivot_row)
+        pivot_val = A[pivot_row][col]
+        if mod is None:
+            inv = Fraction(1) / pivot_val
         else:
-            x = [0.0 for _ in range(n)]
-            one = 1.0
-        x[free] = one
-        # For each pivot row r_idx corresponding to pivot column p:
-        # The equation from row r_idx is:
-        #   x[p] + sum_{j in free_cols, j > p} R[r_idx, j]*x[j] = 0
-        # so we solve for x[p] = - sum_{j in free_cols} R[r_idx, j]*x[j]
-        for r_idx, p in enumerate(pivot_cols):
-            # Only process if the pivot column p is less than free;
-            # note: since our RREF is computed columnwise, the pivot rows are in order.
-            # (You may also compute in reverse order.)
-            s = one * 0  # initialize sum to 0 (works for both Fraction and float)
-            for j in free_cols:
-                # In exact mode, use Fraction arithmetic; in float mode, float multiplication.
-                s += R[r_idx, j] * x[j]
-            x[p] = -s
-        # Append x as a NumPy array. If in exact mode, you may wish to convert the Fractions
-        # to floats or strings for display.
-        basis.append(np.array(x, dtype=object if use_exact else float))
-    return basis
+            inv = modinv(pivot_val, mod)
+        for c in range(col, cols):
+            if mod is None:
+                A[pivot_row][c] *= inv
+            else:
+                A[pivot_row][c] = (A[pivot_row][c] * inv) % mod
+        for r in range(pivot_row + 1, rows):
+            factor = A[r][col]
+            if mod is None:
+                if factor != 0:
+                    for c in range(col, cols):
+                        A[r][c] -= factor * A[pivot_row][c]
+            else:
+                if factor % mod != 0:
+                    for c in range(col, cols):
+                        A[r][c] = (A[r][c] - factor * A[pivot_row][c]) % mod
+        pivot_row += 1
+        if pivot_row == rows:
+            break
+
+    # Identify free columns
+    all_cols = set(range(cols))
+    free_cols = sorted(list(all_cols - set(pivot_cols)))
+    if not free_cols:
+        elapsed_time = time.time() - start_time
+        return None, elapsed_time  # full column rank
+
+    # Construct a nontrivial solution by setting one free variable to 1.
+    if mod is None:
+        solution = [Fraction(0) for _ in range(cols)]
+        solution[free_cols[0]] = Fraction(1)
+    else:
+        solution = [0 for _ in range(cols)]
+        solution[free_cols[0]] = 1
+
+    # Back-substitution in reverse order.
+    for i in reversed(range(len(pivot_cols))):
+        p = pivot_cols[i]
+        r_idx = pivot_rows[i]
+        s_val = 0
+        for j in range(p + 1, cols):
+            if mod is None:
+                s_val += A[r_idx][j] * solution[j]
+            else:
+                s_val = (s_val + A[r_idx][j] * solution[j]) % mod
+        if mod is None:
+            solution[p] = -s_val
+        else:
+            solution[p] = (-s_val) % mod
+
+    # Normalize solution to a bit-string if possible.
+    if mod is not None and mod == 2:
+        sol_str = "".join("1" if solution[i] % 2 != 0 else "0" for i in range(cols))
+    else:
+        # Check if solution is binary (i.e. 0 or ±1 for exact arithmetic)
+        is_binary = True
+        for s_val in solution:
+            if mod is None:
+                if s_val != 0 and abs(s_val) != 1:
+                    is_binary = False
+                    break
+            else:
+                if s_val % mod not in (0, 1):
+                    is_binary = False
+                    break
+        if is_binary:
+            sol_str = "".join(
+                "1" if (s_val != 0 if mod is None else s_val % mod != 0) else "0" for s_val in solution)
+        else:
+            sol_str = "(" + ", ".join(str(s_val) for s_val in solution) + ")"
+
+    elapsed_time = time.time() - start_time
+    return sol_str, elapsed_time
 
 
 ###############################################
@@ -405,7 +419,7 @@ def solve_nullspace_generic(A, use_exact=False, tol=1e-12):
 
 if __name__ == '__main__':
     # Define the secret string for Simon's algorithm (you can experiment with different strings)
-    s = '1001110010'
+    s = '10011101001111'
     n = len(s)
 
     circ = Circuit()
@@ -494,17 +508,9 @@ if __name__ == '__main__':
     ###############################################
     # (Optional) Compare with the generic method
     ###############################################
-    # Convert best_matrix to a NumPy array of floats
-    float_matrix = best_matrix.astype(float)
-    start_time = time.time()
-    nullspace_basis = solve_nullspace_generic(float_matrix)
-    generic_time = time.time() - start_time
-    if nullspace_basis:
-        null_vector = nullspace_basis[0]
-        binary_string = "".join(null_vector.astype(int).astype(str))
-        print("Generic solver computed secret string:", binary_string)
-    else:
-        print("Generic solver: No nontrivial nullspace found.")
+    generic_str, generic_time = get_secret_integer_generic(best_matrix.tolist())
+    print("Computed secret string (generic method):", generic_str)
+    print("Time for generic nullspace computation: {:.9f} seconds".format(generic_time))
 
     ###############################################
     # Compare different sparsities, for all possible matrices, with bitwise solver
@@ -523,3 +529,21 @@ if __name__ == '__main__':
     # plt.ylabel("Time (s)")
     # plt.title("Density vs. time for bitwise GF(2) solver")
     # plt.show()
+
+    ###  test the methods with smaller matrices
+    # print("##########################")
+    # m1 = [[1, 0, 1], [0, 1, 1], [1, 1, 0]]
+    # print("Matrix 1:")
+    # print(m1)
+    # secret_str, elapsed_time = get_secret_integer_bitwise(m1)
+    # print("Computed secret string (bitwise GF(2) solver):", secret_str)
+    # print("Time for nullspace computation: {:.9f} seconds".format(elapsed_time))
+
+    # secret_str, elapsed_time = get_secret_integer_generic(m1)
+    # print("Computed secret string (generic method):", secret_str)
+    # print("Time for generic nullspace computation: {:.9f} seconds".format(elapsed_time))
+
+    # m2 = [[2, 3, 1, 5], [6, 1, 4, 1], [1, 2, 1, 3], [-1, 1, 1, 2]]
+    # secret_str, elapsed_time = get_secret_integer_generic(m2)
+    # print("Computed secret string (generic method):", secret_str)
+    # print("Time for generic nullspace computation: {:.9f} seconds".format(elapsed_time))
