@@ -108,7 +108,7 @@ def find_sparse_enough_matrix_greedy(samples, threshold, required_count=None, ma
 
     n = len(samples[0])
     if required_count is None:
-        required_count = n  # by default, we want n independent rows
+        required_count = n - 1
 
     best_candidate = None
     best_density = float('inf')
@@ -419,7 +419,7 @@ def get_secret_integer_generic(matrix, mod=None):
 
 if __name__ == '__main__':
     # Define the secret string for Simon's algorithm (you can experiment with different strings)
-    s = '10011101001111'
+    s = '101101001110'
     n = len(s)
 
     circ = Circuit()
@@ -472,19 +472,67 @@ if __name__ == '__main__':
     # # Convert each independent set (a tuple of n bitstrings) into a numpy array (each row is a vector)
     # matrices = [np.array(ind_set) for ind_set in independent_sets]
 
-    # Choose the one with the lowest density (fewest ones) – a heuristic that might make elimination faster.
-    best_matrix = find_sparse_enough_matrix_greedy(
-        sample_list, 3 * len(sample_list[0]))  # find_most_sparse_matrix(matrices) # -> only when s is small
-    print("Chosen independent set (matrix form):")
-    print(best_matrix)
+    # --- Simple selection of linearly independent vectors ---
+    # Select n-1 linearly independent vectors from the sample list
+    selected_vectors = []
 
-    best_matrix = np.array(best_matrix)
+    for vector in sample_list:
+        # Skip if we already have enough vectors
+        if len(selected_vectors) >= n - 1:
+            break
+
+        # Check if adding this vector keeps the set linearly independent
+        test_set = selected_vectors + [vector]
+        if is_independent_set(test_set):
+            selected_vectors.append(vector)
+
+    # Check if we found enough linearly independent vectors
+    if len(selected_vectors) < n - 1:
+        raise Exception(
+            f"Could not find {n-1} linearly independent vectors. Rerun Simon's algorithm with more shots.")
+
+    print("Selected linearly independent vectors ({} vectors):".format(len(selected_vectors)))
+    print(selected_vectors)
+    # Test if the selected vectors are linearly independent
+    if not is_independent_set(selected_vectors):
+        raise Exception("Error: The selected vectors are not linearly independent.")
+
+    best_matrix = np.array(selected_vectors)
 
     # --- Compute the secret string using our bitwise GF(2) solver ---
     secret_str, elapsed_time = get_secret_integer_bitwise(best_matrix.tolist())
     print("Computed secret string (bitwise GF(2) solver):", secret_str)
     print("Expected secret string:", s)
     print("Time for nullspace computation: {:.9f} seconds".format(elapsed_time))
+
+    # Add orthogonality check
+    print("\n=== Orthogonality Check ===")
+    expected_failures = 0
+    computed_failures = 0
+
+    # Convert secret strings to bit arrays
+    expected_bits = [int(bit) for bit in s]
+    computed_bits = [int(bit) for bit in secret_str]
+
+    print("\nChecking vectors against expected secret:")
+    for i, vector in enumerate(selected_vectors):
+        dot_product = sum(expected_bits[j] & vector[j] for j in range(len(s))) % 2
+        status = "✓" if dot_product == 0 else "✗"
+        print(f"  Vector {i}: {status} (dot product = {dot_product})")
+        if dot_product != 0:
+            expected_failures += 1
+
+    print(f"\nChecking vectors against computed secret:")
+    for i, vector in enumerate(selected_vectors):
+        dot_product = sum(computed_bits[j] & vector[j] for j in range(len(s))) % 2
+        status = "✓" if dot_product == 0 else "✗"
+        print(f"  Vector {i}: {status} (dot product = {dot_product})")
+        if dot_product != 0:
+            computed_failures += 1
+
+    print(
+        f"\nSummary: {expected_failures} failures with expected secret, {computed_failures} with computed secret"
+    )
 
     if secret_str == s:
         print("Success: Found the correct secret string!")
@@ -494,16 +542,16 @@ if __name__ == '__main__':
     ###############################################
     # (Optional) Compare with the galois-based method
     ###############################################
-    GF = galois.GF(2)
-    # Convert best_matrix to a GF(2) matrix
-    gf_matrix = GF(best_matrix)
-    start_time = time.time()
-    null_space = gf_matrix.T.left_null_space()  # left null space using galois
-    galois_time = time.time() - start_time
-    null_vector = np.array(null_space)[0]
-    binary_string = "".join(null_vector.astype(int).astype(str))
-    print("Galois-based solver computed secret string:", binary_string)
-    print("Time for galois-based nullspace computation: {:.9f} seconds".format(galois_time))
+    # GF = galois.GF(2)
+    # # Convert best_matrix to a GF(2) matrix
+    # gf_matrix = GF(best_matrix)
+    # start_time = time.time()
+    # null_space = gf_matrix.T.left_null_space()  # left null space using galois
+    # galois_time = time.time() - start_time
+    # null_vector = np.array(null_space)[0]
+    # binary_string = "".join(null_vector.astype(int).astype(str))
+    # print("Galois-based solver computed secret string:", binary_string)
+    # print("Time for galois-based nullspace computation: {:.9f} seconds".format(galois_time))
 
     ###############################################
     # (Optional) Compare with the generic method
