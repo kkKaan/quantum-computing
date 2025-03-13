@@ -419,7 +419,7 @@ def get_secret_integer_generic(matrix, mod=None):
 
 if __name__ == '__main__':
     # Define the secret string for Simon's algorithm (you can experiment with different strings)
-    s = '101101001110'
+    s = '10110100110010'
     n = len(s)
 
     circ = Circuit()
