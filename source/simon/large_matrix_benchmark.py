@@ -5,7 +5,7 @@ import random
 from simon_amazon_test import get_secret_integer_bitwise, get_secret_integer_generic
 
 
-def generate_full_rank_binary_matrix(n, rank_deficit=1, density=0.5):
+def generate_full_rank_binary_matrix(n, rank_deficit=1, density=0.95):
     """
     Generate an n×n binary matrix (list of lists) over GF(2) with a guaranteed nullspace.
     The idea is:
