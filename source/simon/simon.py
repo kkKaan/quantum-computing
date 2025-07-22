@@ -209,7 +209,7 @@ if __name__ == "__main__":
     # print(f"Most common results: {freqs.most_common(1)[0]}")
 
     # To run on hardware, select the backend with the fewest number of jobs in the queue
-    # service = QiskitRuntimeService(channel="ibm_quantum", token="dac892343da53c40e1fea5dbe253c50570450f29e05045767a44f761cf49ad52ab1f95955043e2c6b6e4116a636c8e6fd3ef5edc5e443e45ac77df4fc17a7880")
+    # service = QiskitRuntimeService(channel="ibm_quantum", token="")
     # backend = service.least_busy(operational=True, simulator=False)
 
     # with Batch(backend=backend) as batch:
