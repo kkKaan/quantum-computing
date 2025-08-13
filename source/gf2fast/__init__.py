@@ -3,31 +3,32 @@ gf2fast: High-Performance Linear Algebra over GF(2)
 ==================================================
 
 A Python library for efficient binary matrix operations with optimized storage
-and computation. Designed for applications in quantum error correction,
-cryptography, coding theory, and network communications.
+and computation. Designed for applications in cryptography, coding theory,
+network communications, and general-purpose binary linear algebra.
 
 Key Features:
-- Sparse matrix storage with multiple formats (CSR, CSC, bit-packed)
+- Sparse matrix storage with multiple formats (CSR, bit-packed)
 - Hardware-optimized bitwise operations
 - Memory-efficient representations for structured matrices
 - Complete linear algebra suite over GF(2)
-- Specialized functions for quantum error correction and coding theory
 
 Usage:
     >>> import gf2fast as gf2
     >>> # Create sparse binary matrix
-    >>> A = gf2.sparse_matrix(rows, cols, density=0.05)
+    >>> from gf2fast import create_sparse_matrix
+    >>> A = create_sparse_matrix(rows, cols, density=0.05)
     >>> # Solve linear system Ax = b over GF(2)
-    >>> x = gf2.solve(A, b)
+    >>> from gf2fast import solve
+    >>> x = solve(A, b)
     >>> # Compute nullspace
-    >>> null_vectors = gf2.nullspace(A)
+    >>> from gf2fast import nullspace
+    >>> null_vectors = nullspace(A)
 """
 
 from .core import *
 from .sparse import *
 from .solvers import *
 from .generators import *
-from .quantum import *
 
 __version__ = "0.1.0"
 __author__ = "Optimized GF(2) Research"
@@ -37,7 +38,6 @@ __all__ = [
     # Core matrix classes
     'SparseGF2Matrix',
     'DenseGF2Matrix',
-    'BitPackedMatrix',
 
     # Basic operations
     'add',
@@ -45,29 +45,45 @@ __all__ = [
     'transpose',
     'rank',
     'det',
+    'trace',
+    'is_invertible',
 
     # Linear systems
     'solve',
     'nullspace',
     'inverse',
     'lu_decomposition',
+    'least_squares',
+    'kernel',
+    'image',
+    'rank_nullity_theorem',
+    'solve_multiple_rhs',
+    'iterative_refinement',
+    'benchmark_solver',
 
     # Matrix generators
     'identity',
+    'zeros',
+    'ones',
     'random_sparse',
+    'random_regular',
     'circulant',
+    'circulant_random',
+    'toeplitz',
     'vandermonde',
     'ldpc_matrix',
-    'surface_code_matrix',
+    # Quantum-specific generators intentionally not exported at top-level
     'hamming_matrix',
+    'bch_matrix',
 
-    # Quantum computing
-    'pauli_group',
-    'stabilizer_matrix',
-    'syndrome_decode',
+    # Advanced properties
+    'reduced_row_echelon_form',
+    'matrix_power',
+    'characteristic_polynomial',
+    'minimal_polynomial',
+    'matrix_norm',
+    'condition_number',
 
-    # Utilities
-    'benchmark',
-    'memory_usage',
-    'sparsity_stats'
+    # Factory
+    'create_sparse_matrix'
 ]

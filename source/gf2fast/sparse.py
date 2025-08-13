@@ -198,10 +198,10 @@ class SparseGF2Matrix:
             if self.cols <= 64:
                 return int(self.bitpacked_rows[row_idx, 0])
             else:
-                # Combine multiple 64-bit words
+                # Combine multiple 64-bit words into a Python int
                 result = 0
                 for i, word in enumerate(self.bitpacked_rows[row_idx]):
-                    result |= (word << (i * 64))
+                    result |= (int(word) << (i * 64))
                 return result
 
         elif self.format in ["csr", "csr_compact"]:
@@ -272,12 +272,9 @@ class SparseGF2Matrix:
             row_val = int(row_val) if hasattr(row_val, '__int__') else row_val
 
             for word_idx in range(words_per_row):
-                # Extract 64-bit word
+                # Extract 64-bit word at the correct offset
                 shift = word_idx * 64
-                if shift < 64:  # Only process if shift is reasonable
-                    word_bits = (row_val >> shift) & 0xFFFFFFFFFFFFFFFF  # 64-bit mask
-                else:
-                    word_bits = 0
+                word_bits = (row_val >> shift) & 0xFFFFFFFFFFFFFFFF  # 64-bit mask
                 self.bitpacked_rows[i, word_idx] = word_bits
 
     def memory_usage(self) -> SparseStats:

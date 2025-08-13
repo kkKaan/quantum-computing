@@ -20,6 +20,14 @@ from typing import List, Tuple, Optional, Union
 from .sparse import SparseGF2Matrix, DenseGF2Matrix, SparseStats
 
 
+def _popcount_parity(x: int) -> int:
+    """Return parity of number of set bits in x."""
+    try:
+        return x.bit_count() & 1  # Python 3.8+
+    except AttributeError:
+        return bin(x).count('1') % 2
+
+
 def add(A: Union[SparseGF2Matrix, DenseGF2Matrix],
         B: Union[SparseGF2Matrix, DenseGF2Matrix]) -> Union[SparseGF2Matrix, DenseGF2Matrix]:
     """
@@ -82,9 +90,8 @@ def multiply(A: Union[SparseGF2Matrix, DenseGF2Matrix],
         result_row = 0
 
         for j in range(B.cols):
-            # Dot product in GF(2): popcount(A_row & B_col) mod 2
-            dot_product = bin(row_a & B_cols[j]).count('1') % 2
-            if dot_product:
+            # Dot product in GF(2): parity(popcount(A_row & B_col))
+            if _popcount_parity(row_a & B_cols[j]):
                 result_row |= (1 << j)
 
         result_rows.append(result_row)
@@ -180,35 +187,39 @@ def det(A: Union[SparseGF2Matrix, DenseGF2Matrix]) -> int:
 
 
 def _det_bitwise(rows: List[int], n: int) -> int:
-    """Internal determinant computation."""
-    # Gaussian elimination with row swap counting
+    """Internal determinant computation over GF(2).
+
+    Returns 1 iff the matrix is full rank (all pivots found), else 0.
+    """
     A = rows[:]
-    swaps = 0
+    r = 0
 
     for col in range(n):
-        # Find pivot
+        # Find pivot in or below row r
         pivot_row = None
-        for i in range(col, n):
+        for i in range(r, n):
             if (A[i] >> col) & 1:
                 pivot_row = i
                 break
 
         if pivot_row is None:
-            return 0  # Singular matrix
+            continue
 
-        # Swap rows if needed
-        if pivot_row != col:
-            A[col], A[pivot_row] = A[pivot_row], A[col]
-            swaps += 1
+        # Move pivot to row r
+        if pivot_row != r:
+            A[r], A[pivot_row] = A[pivot_row], A[r]
 
-        # Eliminate below
-        for i in range(col + 1, n):
-            if (A[i] >> col) & 1:
-                A[i] ^= A[col]
+        # Eliminate other 1s in column
+        for i in range(n):
+            if i != r and (A[i] >> col) & 1:
+                A[i] ^= A[r]
 
-    # Determinant is (-1)^swaps * product of diagonal
-    # In GF(2): (-1)^swaps = 1 always, diagonal product = 1 if all diagonal elements are 1
-    return swaps % 2  # In GF(2), determinant is parity of swaps
+        r += 1
+        if r == n:
+            break
+
+    # Full rank iff we found n pivots
+    return 1 if r == n else 0
 
 
 def trace(A: Union[SparseGF2Matrix, DenseGF2Matrix]) -> int:
