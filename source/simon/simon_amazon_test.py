@@ -1,14 +1,12 @@
-from braket.circuits import Circuit, circuit
-from braket.devices import LocalSimulator
-from simons_utils import simons_oracle
-from fractions import Fraction
-import numpy as np
 import itertools
 import time
-import matplotlib.pyplot as plt
+from fractions import Fraction
+
+import numpy as np
+from braket.circuits import Circuit
+from braket.devices import LocalSimulator
 
 # Import the galois library if you want to compare timing (we use it only for comparison here)
-import galois
 
 # Sets the device to run the circuit on
 device = LocalSimulator()
@@ -23,7 +21,7 @@ def get_all_combinations(vectors):
     Generate all possible combinations (of size n) from the given list of vectors.
     """
     n = len(vectors[0])
-    print('The number of vectors is: ' + str(len(vectors)))
+    print("The number of vectors is: " + str(len(vectors)))
     return list(itertools.combinations(vectors, n))
 
 
@@ -34,12 +32,12 @@ def is_independent_set(vectors):
     """
     matrix = np.array(vectors, dtype=float)
     rank = np.linalg.matrix_rank(matrix)
-    return (rank == len(vectors))
+    return rank == len(vectors)
 
 
 def get_independent_set(samples):
     """
-    From a list of measurement bitstrings (each as a list of ints), return the first combination 
+    From a list of measurement bitstrings (each as a list of ints), return the first combination
     of size n that is linearly independent.
     """
     all_combinations = get_all_combinations(samples)
@@ -58,7 +56,7 @@ def get_all_independent_sets(samples):
     for combination in all_combinations:
         if is_independent_set(combination):
             independent_sets.append(combination)
-    print('The number of independent sets is: ' + str(len(independent_sets)))
+    print("The number of independent sets is: " + str(len(independent_sets)))
     return independent_sets
 
 
@@ -92,13 +90,13 @@ def find_sparse_enough_matrix_greedy(samples, threshold, required_count=None, ma
     try to greedily select a subset (of size 'required_count') that is linearly independent
     (using is_independent_set) and whose density (total number of ones in the candidate matrix)
     is below the threshold.
-    
+
     Parameters:
       samples: list of lists, each inner list is a bit string (list of ints)
       threshold: density threshold (number of ones in the candidate matrix)
       required_count: number of rows required (default is len(samples[0]), i.e. bit-length)
       max_trials: maximum number of random order trials to attempt
-      
+
     Returns:
       A candidate independent set (as a list of bit-string lists) if one with density <= threshold
       is found; otherwise, returns the candidate with the lowest density found.
@@ -111,7 +109,7 @@ def find_sparse_enough_matrix_greedy(samples, threshold, required_count=None, ma
         required_count = n - 1
 
     best_candidate = None
-    best_density = float('inf')
+    best_density = float("inf")
 
     # Try multiple random orderings.
     for _ in range(max_trials):
@@ -277,14 +275,14 @@ def modinv(a, p):
 def get_secret_integer_generic(matrix, mod=None):
     """
     A generic nullspace solver that uses our own Gaussian elimination routine.
-    
+
     Parameters:
        matrix : a list of lists (or NumPy array) representing the matrix.
        mod    : if provided (e.g. mod=2), perform arithmetic modulo mod.
                 If None and all entries are 0 or 1, then automatically use mod=2.
-                
+
     Returns:
-       A tuple (sol_str, elapsed_time) where sol_str is a string representation of one 
+       A tuple (sol_str, elapsed_time) where sol_str is a string representation of one
        nontrivial nullspace vector. If no free variable is found (i.e. full column rank), returns (None, elapsed_time).
     """
     start_time = time.time()
@@ -300,7 +298,7 @@ def get_secret_integer_generic(matrix, mod=None):
 
     # Automatically set mod=2 if mod is None and all entries are 0 or 1.
     if mod is None:
-        is_binary = all((x in (0, 1) for row in mat for x in row))
+        is_binary = all(x in (0, 1) for row in mat for x in row)
         if is_binary:
             mod = 2
 
@@ -321,9 +319,9 @@ def get_secret_integer_generic(matrix, mod=None):
         pivot_found = False
         for r in range(pivot_row, rows):
             if mod is None:
-                cond = (A[r][col] != 0)
+                cond = A[r][col] != 0
             else:
-                cond = (A[r][col] % mod != 0)
+                cond = A[r][col] % mod != 0
             if cond:
                 pivot_found = True
                 max_row = r
@@ -405,7 +403,8 @@ def get_secret_integer_generic(matrix, mod=None):
                     break
         if is_binary:
             sol_str = "".join(
-                "1" if (s_val != 0 if mod is None else s_val % mod != 0) else "0" for s_val in solution)
+                "1" if (s_val != 0 if mod is None else s_val % mod != 0) else "0" for s_val in solution
+            )
         else:
             sol_str = "(" + ", ".join(str(s_val) for s_val in solution) + ")"
 
@@ -417,9 +416,9 @@ def get_secret_integer_generic(matrix, mod=None):
 # Main postprocessing and quantum circuit execution
 ###############################################
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # Define the secret string for Simon's algorithm (you can experiment with different strings)
-    s = '1011010011110'
+    s = "1011010011110"
     n = len(s)
 
     circ = Circuit()
@@ -452,7 +451,7 @@ if __name__ == '__main__':
 
     # Extract the measurement bitstrings (as lists of ints), ignoring the all-zeros result.
     sample_list = []
-    for key in new_results.keys():
+    for key in new_results:
         if key != "0" * n:
             sample_list.append([int(c) for c in key])
 
@@ -489,9 +488,10 @@ if __name__ == '__main__':
     # Check if we found enough linearly independent vectors
     if len(selected_vectors) < n - 1:
         raise Exception(
-            f"Could not find {n-1} linearly independent vectors. Rerun Simon's algorithm with more shots.")
+            f"Could not find {n - 1} linearly independent vectors. Rerun Simon's algorithm with more shots."
+        )
 
-    print("Selected linearly independent vectors ({} vectors):".format(len(selected_vectors)))
+    print(f"Selected linearly independent vectors ({len(selected_vectors)} vectors):")
     print(selected_vectors)
     # Test if the selected vectors are linearly independent
     if not is_independent_set(selected_vectors):
@@ -503,7 +503,7 @@ if __name__ == '__main__':
     secret_str, elapsed_time = get_secret_integer_bitwise(best_matrix.tolist())
     print("Computed secret string (bitwise GF(2) solver):", secret_str)
     print("Expected secret string:", s)
-    print("Time for nullspace computation: {:.9f} seconds".format(elapsed_time))
+    print(f"Time for nullspace computation: {elapsed_time:.9f} seconds")
 
     # Add orthogonality check
     print("\n=== Orthogonality Check ===")
@@ -522,7 +522,7 @@ if __name__ == '__main__':
         if dot_product != 0:
             expected_failures += 1
 
-    print(f"\nChecking vectors against computed secret:")
+    print("\nChecking vectors against computed secret:")
     for i, vector in enumerate(selected_vectors):
         dot_product = sum(computed_bits[j] & vector[j] for j in range(len(s))) % 2
         status = "✓" if dot_product == 0 else "✗"
@@ -558,7 +558,7 @@ if __name__ == '__main__':
     ###############################################
     generic_str, generic_time = get_secret_integer_generic(best_matrix.tolist())
     print("Computed secret string (generic method):", generic_str)
-    print("Time for generic nullspace computation: {:.9f} seconds".format(generic_time))
+    print(f"Time for generic nullspace computation: {generic_time:.9f} seconds")
 
     ###############################################
     # Compare different sparsities, for all possible matrices, with bitwise solver

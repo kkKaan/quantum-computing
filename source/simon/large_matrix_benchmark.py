@@ -1,7 +1,7 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import time
 import random
+
+import matplotlib.pyplot as plt
+import numpy as np
 from simon_amazon_test import get_secret_integer_bitwise, get_secret_integer_generic
 
 
@@ -16,7 +16,7 @@ def generate_full_rank_binary_matrix(n, rank_deficit=1, density=0.95):
          of the columns of Q (here, for simplicity, we set them as the bitwise sum mod 2
          of all columns in Q).
       3. Return the n×n matrix M = [ Q | L ].
-    
+
     For example, with rank_deficit=1, M will have rank n-1.
     """
     # Number of independent columns to generate:
@@ -100,7 +100,7 @@ def run_large_matrix_benchmark():
     sizes = [20, 40, 60, 80, 100, 150, 200, 250, 300, 400, 500, 600, 800, 1000]
 
     # Store results
-    results = {'sizes': sizes, 'bitwise_times': [], 'generic_times': [], 'speedups': []}
+    results = {"sizes": sizes, "bitwise_times": [], "generic_times": [], "speedups": []}
 
     for size in sizes:
         print(f"\nTesting {size}x{size} matrix:")
@@ -112,18 +112,18 @@ def run_large_matrix_benchmark():
             # Test bitwise solver (which is optimized for GF(2))
             print("  Running bitwise solver...")
             secret_bitwise, t_bitwise = get_secret_integer_bitwise(matrix)
-            results['bitwise_times'].append(t_bitwise)
+            results["bitwise_times"].append(t_bitwise)
             print(f"  Bitwise solver time: {t_bitwise:.6f} seconds")
 
             # Test generic solver: we force generic solver to work in mod 2 arithmetic.
             print("  Running generic solver (mod 2)...")
             secret_generic, t_generic = get_secret_integer_generic(matrix, mod=2)
-            results['generic_times'].append(t_generic)
+            results["generic_times"].append(t_generic)
             print(f"  Generic solver time: {t_generic:.6f} seconds")
 
             # Calculate speedup: generic time / bitwise time
-            speedup = t_generic / t_bitwise if t_bitwise > 0 else float('inf')
-            results['speedups'].append(speedup)
+            speedup = t_generic / t_bitwise if t_bitwise > 0 else float("inf")
+            results["speedups"].append(speedup)
             print(f"  Speedup (Generic/Bitwise): {speedup:.2f}x")
 
             # (Optional) Verify that the solutions match:
@@ -131,18 +131,20 @@ def run_large_matrix_benchmark():
                 print("  WARNING: Solvers produced different secret strings!")
         except Exception as e:
             print(f"  ERROR: {str(e)}")
-            results['bitwise_times'].append(None)
-            results['generic_times'].append(None)
-            results['speedups'].append(None)
+            results["bitwise_times"].append(None)
+            results["generic_times"].append(None)
+            results["speedups"].append(None)
 
     plot_results(results)
     print("\nBenchmark Summary:")
     print("------------------")
     for i, size in enumerate(sizes):
-        if results['bitwise_times'][i] is not None:
-            print(f"Size {size}x{size}: Bitwise={results['bitwise_times'][i]:.6f}s, "
-                  f"Generic={results['generic_times'][i]:.6f}s, "
-                  f"Speedup={results['speedups'][i]:.2f}x")
+        if results["bitwise_times"][i] is not None:
+            print(
+                f"Size {size}x{size}: Bitwise={results['bitwise_times'][i]:.6f}s, "
+                f"Generic={results['generic_times'][i]:.6f}s, "
+                f"Speedup={results['speedups'][i]:.2f}x"
+            )
         else:
             print(f"Size {size}x{size}: Failed")
 
@@ -151,21 +153,21 @@ def plot_results(results):
     """
     Plot the benchmark results.
     """
-    valid_indices = [i for i, t in enumerate(results['bitwise_times']) if t is not None]
-    sizes = [results['sizes'][i] for i in valid_indices]
-    bitwise = [results['bitwise_times'][i] for i in valid_indices]
-    generic = [results['generic_times'][i] for i in valid_indices]
+    valid_indices = [i for i, t in enumerate(results["bitwise_times"]) if t is not None]
+    sizes = [results["sizes"][i] for i in valid_indices]
+    bitwise = [results["bitwise_times"][i] for i in valid_indices]
+    generic = [results["generic_times"][i] for i in valid_indices]
 
     plt.figure(figsize=(12, 8))
-    plt.semilogy(sizes, bitwise, 'o-', label='Bitwise GF(2) Solver', linewidth=2, markersize=8)
-    plt.semilogy(sizes, generic, 's-', label='Generic Solver (mod 2)', linewidth=2, markersize=8)
-    plt.xlabel('Matrix Size (n)', fontsize=12)
-    plt.ylabel('Time (seconds)', fontsize=12)
-    plt.title('Solver Performance Comparison on n×n Binary Matrices', fontsize=14)
+    plt.semilogy(sizes, bitwise, "o-", label="Bitwise GF(2) Solver", linewidth=2, markersize=8)
+    plt.semilogy(sizes, generic, "s-", label="Generic Solver (mod 2)", linewidth=2, markersize=8)
+    plt.xlabel("Matrix Size (n)", fontsize=12)
+    plt.ylabel("Time (seconds)", fontsize=12)
+    plt.title("Solver Performance Comparison on n×n Binary Matrices", fontsize=14)
     plt.legend(fontsize=12)
-    plt.grid(True, which='both', linestyle='--', alpha=0.7)
+    plt.grid(True, which="both", linestyle="--", alpha=0.7)
     plt.tight_layout()
-    plt.savefig('solver_benchmark.png')
+    plt.savefig("solver_benchmark.png")
     plt.show()
 
 
